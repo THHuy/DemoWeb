@@ -1,0 +1,357 @@
+# ROLE
+
+Bạn là Senior Frontend Developer, UI/UX Designer, Branding Specialist và SEO Expert.
+
+# TECH STACK
+
+Bắt buộc sử dụng:
+
+* Next.js 15 App Router
+* TypeScript
+* Tailwind CSS
+* shadcn/ui
+* Aceternity UI
+* Framer Motion
+* Lucide React
+* next/image
+
+# PROJECT
+
+Thiết kế Landing Page cao cấp cho một quán cà phê / nhà hàng.
+
+Phong cách:
+
+* Rustic
+* Nature
+* Modern
+* Premium
+* Instagram Friendly
+
+Lấy cảm hứng từ:
+
+* Starbucks Reserve
+* Highlands Coffee
+* The Coffee House
+* Nhà hàng sân vườn cao cấp
+* Resort Cafe
+
+# GOAL
+
+Landing Page phải khiến khách hàng:
+
+* Muốn ghé quán
+* Muốn xem menu
+* Muốn đặt bàn
+* Muốn check-in
+* Muốn xem Google Maps
+
+# VISUAL STYLE
+
+Tone màu:
+
+Primary:
+#6F4E37
+
+Secondary:
+#A67C52
+
+Accent:
+#D4A373
+
+Background:
+#F8F5F2
+
+Text:
+#2B2B2B
+
+Sử dụng:
+
+* Glassmorphism nhẹ
+* Gradient tinh tế
+* Nhiều ảnh lớn
+* Hiệu ứng ánh sáng mềm
+* Không quá nhiều màu sắc
+
+# PAGE STRUCTURE
+
+## 1. Hero Section
+
+Background Full Screen
+
+Video hoặc hình ảnh quán chất lượng cao.
+
+Overlay tối nhẹ.
+
+Sử dụng:
+
+* Aceternity Spotlight
+* Framer Motion
+
+Heading:
+
+Hương vị của sự thư giãn
+
+Subheading:
+
+Không chỉ là cà phê, mà còn là nơi lưu giữ những khoảnh khắc đẹp.
+
+Buttons:
+
+☕ Xem Menu
+
+📍 Chỉ Đường
+
+Hiển thị:
+
+* Địa chỉ
+* Giờ mở cửa
+* Hotline
+
+Animation:
+
+* Fade Up
+* Scale In
+
+---
+
+## 2. About Section
+
+Tiêu đề:
+
+Câu chuyện của chúng tôi
+
+Nội dung:
+
+Giới thiệu lịch sử quán.
+
+Layout:
+
+Text bên trái
+Ảnh bên phải
+
+Animation:
+
+Scroll Reveal
+
+---
+
+## 3. Signature Menu
+
+Grid Card đẹp.
+
+Hiển thị:
+
+* Cà phê đặc trưng
+* Trà trái cây
+* Bánh ngọt
+* Món ăn nổi bật
+
+Mỗi món:
+
+* Ảnh
+* Tên
+* Mô tả ngắn
+* Giá
+
+Hover:
+
+Scale nhẹ
+
+Sử dụng:
+
+shadcn Card
+
+---
+
+## 4. Gallery Section
+
+Masonry Layout
+
+Sử dụng:
+
+Aceternity Infinite Moving Gallery
+
+Ảnh:
+
+* Không gian quán
+* Đồ uống
+* Món ăn
+* Góc check-in
+
+Hover:
+
+Zoom In
+
+Lightbox
+
+---
+
+## 5. Experience Section
+
+4 điểm nổi bật:
+
+🌿 Không gian xanh
+
+☕ Cà phê rang xay nguyên chất
+
+📶 Wifi tốc độ cao
+
+📸 Nhiều góc sống ảo
+
+Hiệu ứng Bento Grid.
+
+---
+
+## 6. Customer Reviews
+
+Hiển thị đánh giá khách hàng.
+
+Card Glassmorphism.
+
+Avatar
+
+Tên
+
+Đánh giá 5 sao
+
+Animation:
+
+Auto Scroll
+
+---
+
+## 7. Google Map Section
+
+Nhúng Google Maps.
+
+Hiển thị:
+
+* Địa chỉ
+* Hotline
+* Giờ mở cửa
+
+Button:
+
+Chỉ đường ngay
+
+---
+
+## 8. Booking Section
+
+Form đặt bàn.
+
+Thông tin:
+
+* Họ tên
+* Số điện thoại
+* Ngày
+* Giờ
+* Số lượng khách
+
+Validation đẹp bằng shadcn/ui.
+
+---
+
+## 9. CTA Section
+
+Background ảnh quán buổi tối.
+
+Heading:
+
+Hẹn bạn tại quán
+
+Subheading:
+
+Một ly cà phê ngon luôn bắt đầu bằng một cuộc gặp gỡ.
+
+Buttons:
+
+Đặt bàn
+
+Gọi ngay
+
+---
+
+## 10. Footer
+
+Logo
+
+Menu
+
+Facebook
+
+Instagram
+
+TikTok
+
+Google Maps
+
+Thông tin liên hệ
+
+# ANIMATIONS
+
+Sử dụng Framer Motion:
+
+* Scroll Reveal
+* Fade Up
+* Stagger Children
+* Hover Effects
+* Floating Elements
+* Smooth Page Transition
+
+Animation phải mượt trên mobile.
+
+# SEO
+
+Tối ưu Local SEO:
+
+Meta Title:
+
+[Tên Quán] - Quán Cà Phê Đẹp Tại [Địa Điểm]
+
+Meta Description:
+
+Khám phá không gian cà phê thư giãn, đồ uống chất lượng và những góc check-in đẹp tại [Tên Quán].
+
+Tạo:
+
+* sitemap.ts
+* robots.ts
+* Open Graph
+* Twitter Card
+* JSON-LD LocalBusiness
+* JSON-LD Restaurant hoặc Cafe
+
+# PERFORMANCE
+
+* next/image
+* Lazy Load
+* Lighthouse > 95
+* Core Web Vitals tối ưu
+
+# RESPONSIVE
+
+Mobile First
+
+Hỗ trợ:
+
+* Mobile
+* Tablet
+* Desktop
+* 4K
+
+# OUTPUT
+
+Tạo toàn bộ source code hoàn chỉnh.
+
+Tách cấu trúc:
+
+app/
+components/
+components/sections/
+components/ui/
+lib/
+hooks/
+public/images/
+
+Code production-ready.

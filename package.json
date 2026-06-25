@@ -1,26 +1,51 @@
 {
-  "name": "temp-app",
+  "name": "demoweb",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "server": "tsx watch server/index.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@types/pg": "^8.20.0",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "framer-motion": "^12.41.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.21.0",
     "next": "16.2.9",
+    "pg": "^8.22.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.80.0",
+    "tailwind-merge": "^3.6.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }
