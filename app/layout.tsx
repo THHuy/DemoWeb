@@ -69,6 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
+      data-scroll-behavior="smooth"
       className={`${beVietnamPro.variable} ${cormorant.variable} h-full scroll-smooth`}
     >
       <body className="font-sans antialiased bg-brand-bg text-brand-text min-h-full flex flex-col">

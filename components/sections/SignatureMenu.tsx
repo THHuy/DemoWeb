@@ -106,7 +106,7 @@ export default function SignatureMenu() {
   useEffect(() => {
     async function loadMenu() {
       try {
-        const res = await fetch("/api/menu");
+        const res = await fetch("/api/menu?scope=website");
         if (res.ok) {
           const data = await res.json();
           // Filter only active items and map image_url to image

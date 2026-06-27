@@ -22,15 +22,26 @@ interface MenuItem {
   image_url: string;
   is_active: boolean;
   sort_order: number;
+  show_on_website?: boolean;
+  show_on_pos?: boolean;
+  price_s?: number | null;
+  price_m?: number | null;
+  price_l?: number | null;
 }
 
-const categories = [
-  { id: "all", name: "Tất cả", icon: Coffee },
-  { id: "coffee", name: "Cà phê", icon: Coffee },
-  { id: "tea", name: "Trà", icon: Flower },
-  { id: "pastry", name: "Bánh ngọt", icon: Cake },
-  { id: "dish", name: "Món ăn", icon: UtensilsCrossed },
-];
+function getCategoryIcon(iconName: string) {
+  switch (iconName?.toLowerCase()) {
+    case "coffee": return Coffee;
+    case "flower": return Flower;
+    case "cake": return Cake;
+    case "utensilscrossed":
+    case "utensils":
+    case "dish":
+      return UtensilsCrossed;
+    default:
+      return Coffee;
+  }
+}
 
 const emptyForm = {
   name: "",
@@ -39,10 +50,21 @@ const emptyForm = {
   description: "",
   image_url: "",
   sort_order: 0,
+  show_on_website: true,
+  show_on_pos: true,
+  price_s: "",
+  price_m: "",
+  price_l: "",
 };
 
 export default function MenuManagement() {
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<{ slug: string; name: string; icon: string }[]>([
+    { slug: "coffee", name: "Cà phê", icon: "Coffee" },
+    { slug: "tea", name: "Trà", icon: "Flower" },
+    { slug: "pastry", name: "Bánh ngọt", icon: "Cake" },
+    { slug: "dish", name: "Món ăn", icon: "UtensilsCrossed" }
+  ]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -52,8 +74,27 @@ export default function MenuManagement() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchItems();
   }, [activeCategory]);
+
+  async function fetchCategories() {
+    try {
+      const res = await fetch("/api/menu/categories");
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data);
+        if (data.length > 0) {
+          setForm(prev => ({ ...prev, category: data[0].slug }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch categories:", err);
+    }
+  }
 
   async function fetchItems() {
     setLoading(true);
@@ -75,7 +116,10 @@ export default function MenuManagement() {
 
   function openAddModal() {
     setEditingItem(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      category: categories[0]?.slug || "coffee"
+    });
     setModalOpen(true);
   }
 
@@ -84,10 +128,15 @@ export default function MenuManagement() {
     setForm({
       name: item.name,
       category: item.category,
-      price: item.price,
-      description: item.description,
-      image_url: item.image_url,
-      sort_order: item.sort_order,
+      price: String(item.price_m || item.price || ""),
+      description: item.description || "",
+      image_url: item.image_url || "",
+      sort_order: item.sort_order || 0,
+      show_on_website: item.show_on_website ?? true,
+      show_on_pos: item.show_on_pos ?? true,
+      price_s: item.price_s !== null && item.price_s !== undefined ? String(item.price_s) : "",
+      price_m: item.price_m !== null && item.price_m !== undefined ? String(item.price_m) : String(item.price || ""),
+      price_l: item.price_l !== null && item.price_l !== undefined ? String(item.price_l) : "",
     });
     setModalOpen(true);
   }
@@ -166,14 +215,14 @@ export default function MenuManagement() {
       {/* Category Tabs + Search */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
         <div className="flex gap-2">
-          {categories.map((cat) => {
-            const Icon = cat.icon;
+          {[{ slug: "all", name: "Tất cả", icon: "Coffee" }, ...categories].map((cat) => {
+            const Icon = getCategoryIcon(cat.icon);
             return (
               <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                  activeCategory === cat.id
+                key={cat.slug}
+                onClick={() => setActiveCategory(cat.slug)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeCategory === cat.slug
                     ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                     : "bg-white/5 text-white/60 hover:bg-white/10 border border-transparent"
                 }`}
@@ -327,22 +376,53 @@ export default function MenuManagement() {
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
                 className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500/50"
               >
-                <option value="coffee" className="bg-stone-900 text-white">Cà phê</option>
-                <option value="tea" className="bg-stone-900 text-white">Trà</option>
-                <option value="pastry" className="bg-stone-900 text-white">Bánh ngọt</option>
-                <option value="dish" className="bg-stone-900 text-white">Món ăn</option>
+                {categories.map((cat) => (
+                  <option key={cat.slug} value={cat.slug} className="bg-stone-900 text-white">
+                    {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-white/60 mb-1.5">
-                Giá *
+                Giá Size M (Mặc định) *
               </label>
               <input
                 type="text"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                value={form.price_m}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setForm({ ...form, price_m: val, price: val });
+                }}
                 className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500/50"
-                placeholder="VD: 45.000đ"
+                placeholder="VD: 45000"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-white/60 mb-1.5">
+                Giá Size S (Nhỏ - Không bắt buộc)
+              </label>
+              <input
+                type="text"
+                value={form.price_s}
+                onChange={(e) => setForm({ ...form, price_s: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500/50"
+                placeholder="Để trống nếu không có size S"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-white/60 mb-1.5">
+                Giá Size L (Lớn - Không bắt buộc)
+              </label>
+              <input
+                type="text"
+                value={form.price_l}
+                onChange={(e) => setForm({ ...form, price_l: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500/50"
+                placeholder="Để trống nếu không có size L"
               />
             </div>
           </div>
@@ -387,6 +467,27 @@ export default function MenuManagement() {
               }
               className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500/50"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 py-1">
+            <label className="flex items-center gap-2 text-xs font-semibold text-white/70 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.show_on_website}
+                onChange={(e) => setForm({ ...form, show_on_website: e.target.checked })}
+                className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-0 cursor-pointer"
+              />
+              Hiện trên Landing Page
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-white/70 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.show_on_pos}
+                onChange={(e) => setForm({ ...form, show_on_pos: e.target.checked })}
+                className="h-4 w-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-0 cursor-pointer"
+              />
+              Hiện trên POS
+            </label>
           </div>
 
           <div className="flex gap-3 pt-2">

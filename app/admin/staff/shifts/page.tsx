@@ -14,6 +14,9 @@ import {
   Loader2,
   ListFilter,
   Check,
+  ChevronLeft,
+  ChevronRight,
+  Info,
 } from "lucide-react";
 
 interface Coworker {
@@ -41,6 +44,13 @@ interface ActiveShift {
   day_value: string;
 }
 
+const getLocalDateString = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function StaffShifts() {
   const { user } = useAuth();
   const [shiftsList, setShiftsList] = useState<StaffShift[]>([]);
@@ -51,6 +61,14 @@ export default function StaffShifts() {
   // Store shifts list
   const [allShiftsList, setAllShiftsList] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<"personal" | "all">("personal");
+
+  // Week Navigation for store schedule
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  });
 
   // Registration Form States
   const [regDate, setRegDate] = useState("");
@@ -65,11 +83,27 @@ export default function StaffShifts() {
   const [swapSubmitting, setSwapSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
   }, []);
 
-  async function fetchData() {
-    setLoading(true);
+  useEffect(() => {
+    const handleNotification = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const type = customEvent.detail?.type;
+      if (type === "shift_register" || type === "shift_approval" || type === "swap_approval") {
+        fetchData();
+      }
+    };
+    window.addEventListener("sse-notification", handleNotification);
+    return () => {
+      window.removeEventListener("sse-notification", handleNotification);
+    };
+  }, []);
+
+  async function fetchData(showSpinner = false) {
+    if (showSpinner) {
+      setLoading(true);
+    }
     try {
       // 1. Fetch own shifts
       const ownShiftsRes = await fetch("/api/staff/shifts");
@@ -106,39 +140,48 @@ export default function StaffShifts() {
     }
   }
 
-  // Helper to group approved shifts by date and ca
-  const groupAllShiftsByDate = () => {
-    const grouped: { [date: string]: { [shiftId: string]: { shift_name: string; start_time: string; end_time: string; employees: string[] } } } = {};
-    
-    allShiftsList.forEach((s) => {
+  // Helper: Build week dates array
+  const weekDates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(currentWeekStart);
+    date.setDate(date.getDate() + i);
+    weekDates.push(date);
+  }
+
+  // Week navigation
+  function changeWeek(direction: number) {
+    const nextStart = new Date(currentWeekStart);
+    nextStart.setDate(nextStart.getDate() + direction * 7);
+    setCurrentWeekStart(nextStart);
+  }
+
+  // Helper: Get unique employees for current week from allShiftsList
+  const getWeekEmployees = () => {
+    const weekStartStr = getLocalDateString(currentWeekStart);
+    const weekEnd = new Date(currentWeekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndStr = getLocalDateString(weekEnd);
+
+    // Filter shifts for current week
+    const weekShifts = allShiftsList.filter((s) => {
       const dateStr = s.shift_date.substring(0, 10);
-      if (!grouped[dateStr]) {
-        grouped[dateStr] = {};
-      }
-      
-      const sId = s.shift_id.toString();
-      if (!grouped[dateStr][sId]) {
-        grouped[dateStr][sId] = {
-          shift_name: s.shift_name,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          employees: [],
-        };
-      }
-      
-      grouped[dateStr][sId].employees.push(s.employee_name);
+      return dateStr >= weekStartStr && dateStr <= weekEndStr;
     });
 
-    // Sort dates ascending
-    return Object.keys(grouped)
-      .sort()
-      .map((date) => ({
-        date,
-        shifts: Object.keys(grouped[date]).map((sId) => ({
-          shift_id: sId,
-          ...grouped[date][sId],
-        })),
-      }));
+    // Get unique employees
+    const empMap = new Map<string, { id: string; name: string; code: string }>();
+    weekShifts.forEach((s) => {
+      const key = s.employee_id?.toString() || s.employee_name;
+      if (!empMap.has(key)) {
+        empMap.set(key, {
+          id: key,
+          name: s.employee_name,
+          code: s.employee_code || "",
+        });
+      }
+    });
+
+    return { weekShifts, employees: Array.from(empMap.values()) };
   };
 
   async function handleRegister(e: React.FormEvent) {
@@ -211,7 +254,7 @@ export default function StaffShifts() {
   }
 
   // Get approved future shifts of staff for swapping
-  const todayStr = new Date().toISOString().substring(0, 10);
+  const todayStr = getLocalDateString(new Date());
   const swappableShifts = shiftsList.filter(
     (s) => s.status === "approved" && s.shift_date >= todayStr
   );
@@ -231,7 +274,7 @@ export default function StaffShifts() {
       ) : (
         <div>
           {/* Tabs */}
-          <div className="flex border-b border-white/5 gap-6 text-sm font-semibold mb-6">
+          <div className="flex border-b border-white/5 gap-6 text-sm font-semibold mb-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-px">
             <button
               onClick={() => setActiveView("personal")}
               className={`pb-3 transition-colors cursor-pointer relative ${
@@ -257,10 +300,10 @@ export default function StaffShifts() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Calendar/List own shifts */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-stone-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl">
+                <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl">
                   <h3 className="text-md font-semibold text-white mb-4 flex items-center gap-2 font-sans">
                     <CalendarIcon className="w-4 h-4 text-amber-500" />
-                    Lịch Làm Việc Tháng Này
+                    Lịch Làm Việc Của Tôi
                   </h3>
 
                   <div className="overflow-x-auto">
@@ -277,7 +320,7 @@ export default function StaffShifts() {
                         {shiftsList.length === 0 ? (
                           <tr>
                             <td colSpan={4} className="py-8 text-center text-stone-600">
-                              Chưa đăng ký ca làm việc nào trong tháng này.
+                              Chưa đăng ký ca làm việc nào.
                             </td>
                           </tr>
                         ) : (
@@ -320,7 +363,7 @@ export default function StaffShifts() {
               {/* Action Columns */}
               <div className="space-y-8">
                 {/* Shift Register Card */}
-                <div className="bg-stone-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl">
+                <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl">
                   <h3 className="text-md font-semibold text-white mb-4 flex items-center gap-2 font-sans">
                     <Plus className="w-4 h-4 text-amber-500" />
                     Đăng Ký Ca Làm
@@ -377,7 +420,7 @@ export default function StaffShifts() {
                 </div>
 
                 {/* Shift Swap Card */}
-                <div className="bg-stone-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl">
+                <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl">
                   <h3 className="text-md font-semibold text-white mb-4 flex items-center gap-2 font-sans">
                     <RefreshCw className="w-4 h-4 text-amber-500" />
                     Yêu Cầu Đổi Ca Làm
@@ -441,53 +484,108 @@ export default function StaffShifts() {
               </div>
             </div>
           ) : (
-            <div className="bg-stone-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl">
-              <h3 className="text-md font-semibold text-white mb-6 flex items-center gap-2 font-sans">
-                <Users className="w-4 h-4 text-amber-500" />
-                Lịch Phân Ca Toàn Cửa Hàng
-              </h3>
+            <div className="space-y-6">
+              {/* Week navigation control */}
+              <div className="flex items-center justify-between flex-wrap gap-4 bg-stone-900/40 border border-white/5 rounded-2xl p-4 backdrop-blur-xl">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => changeWeek(-1)}
+                    className="w-9 h-9 rounded-xl bg-stone-950 border border-stone-850 hover:bg-stone-900 flex items-center justify-center text-stone-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-semibold text-white font-mono">
+                    Tuần: {weekDates[0].toLocaleDateString("vi-VN")} - {weekDates[6].toLocaleDateString("vi-VN")}
+                  </span>
+                  <button
+                    onClick={() => changeWeek(1)}
+                    className="w-9 h-9 rounded-xl bg-stone-950 border border-stone-850 hover:bg-stone-900 flex items-center justify-center text-stone-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
 
-              <div className="space-y-6">
-                {groupAllShiftsByDate().length === 0 ? (
-                  <p className="text-stone-500 text-xs py-8 text-center">Chưa có lịch làm việc nào được duyệt.</p>
-                ) : (
-                  groupAllShiftsByDate().map((group) => (
-                    <div key={group.date} className="p-5 bg-stone-950/30 border border-white/5 rounded-2xl space-y-4">
-                      {/* Date Header */}
-                      <div className="text-xs font-bold text-amber-400 font-mono tracking-wider">
-                        {new Date(group.date).toLocaleDateString("vi-VN", {
-                          weekday: "long",
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })}
-                      </div>
+                <div className="text-xs text-stone-400 flex items-center gap-2">
+                  <Info className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Lịch ca làm đã được duyệt của toàn bộ cửa hàng.</span>
+                </div>
+              </div>
 
-                      {/* Shifts in this date */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {group.shifts.map((shift) => (
-                          <div key={shift.shift_id} className="p-4 bg-stone-900/50 border border-white/5 rounded-xl space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-stone-200">{shift.shift_name}</span>
-                              <span className="text-[10px] text-stone-500 font-mono">
-                                {shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}
-                              </span>
-                            </div>
-                            
-                            {/* Employees in this shift */}
-                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
-                              {shift.employees.map((empName, idx) => (
-                                <span key={idx} className="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                                  {empName}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+              {/* Weekly schedule Matrix */}
+              <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl overflow-hidden backdrop-blur-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-stone-950/20 text-xs font-semibold text-stone-400 uppercase tracking-wider">
+                        <th className="p-4 pl-6 w-[200px]">Nhân viên</th>
+                        {weekDates.map((date, idx) => (
+                          <th key={idx} className="p-4 text-center">
+                            <p className="font-semibold text-white">
+                              {date.toLocaleDateString("vi-VN", { weekday: "short" })}
+                            </p>
+                            <p className="text-[10px] text-stone-500 font-mono mt-0.5">
+                              {date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                            </p>
+                          </th>
                         ))}
-                      </div>
-                    </div>
-                  ))
-                )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-xs text-stone-300">
+                      {(() => {
+                        const { weekShifts, employees } = getWeekEmployees();
+                        if (employees.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={8} className="p-12 text-center text-stone-500 font-sans">
+                                Không có nhân viên nào có lịch làm việc trong tuần này.
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return employees.map((emp) => (
+                          <tr key={emp.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="p-4 pl-6">
+                              <p className="text-sm font-semibold text-white">{emp.name}</p>
+                              {emp.code && (
+                                <p className="text-[9px] text-stone-500 font-mono">{emp.code}</p>
+                              )}
+                            </td>
+
+                            {weekDates.map((date, dateIdx) => {
+                              const dateStr = getLocalDateString(date);
+                              const empKey = emp.id;
+                              const activeShiftDays = weekShifts.filter(
+                                (s: any) =>
+                                  (s.employee_id?.toString() === empKey || s.employee_name === emp.name) &&
+                                  s.shift_date.substring(0, 10) === dateStr
+                              );
+
+                              return (
+                                <td key={dateIdx} className="p-2 text-center">
+                                  {activeShiftDays.length === 0 ? (
+                                    <span className="text-[10px] text-stone-600 italic">Off</span>
+                                  ) : (
+                                    <div className="flex flex-col gap-1 items-center">
+                                      {activeShiftDays.map((reg: any, regIdx: number) => (
+                                        <span
+                                          key={regIdx}
+                                          className="px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-medium tracking-wide w-full max-w-[100px] truncate"
+                                          title={`${reg.shift_name} (${reg.start_time.substring(0, 5)} - ${reg.end_time.substring(0, 5)})`}
+                                        >
+                                          {reg.shift_name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

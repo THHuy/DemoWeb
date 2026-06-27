@@ -69,8 +69,9 @@ router.get("/shifts", async (req, res) => {
       query += ` AND sr.shift_date >= $2 AND sr.shift_date <= $3`;
       params.push(start_date, end_date);
     } else {
-      // Default current month
-      query += ` AND DATE_TRUNC('month', sr.shift_date) = DATE_TRUNC('month', CURRENT_DATE)`;
+      // Default: previous month, current month, and next month
+      query += ` AND sr.shift_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                 AND sr.shift_date < DATE_TRUNC('month', CURRENT_DATE + INTERVAL '2 month')`;
     }
 
     query += ` ORDER BY sr.shift_date ASC, ws.start_time ASC`;
@@ -112,8 +113,9 @@ router.get("/shifts/all", async (req, res) => {
       query += ` AND sr.shift_date >= $1 AND sr.shift_date <= $2`;
       params.push(start_date, end_date);
     } else {
-      // Default to current month
-      query += ` AND DATE_TRUNC('month', sr.shift_date) = DATE_TRUNC('month', CURRENT_DATE)`;
+      // Default: previous month, current month, and next month
+      query += ` AND sr.shift_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                 AND sr.shift_date < DATE_TRUNC('month', CURRENT_DATE + INTERVAL '2 month')`;
     }
 
     query += ` ORDER BY sr.shift_date ASC, ws.start_time ASC, e.full_name ASC`;
@@ -309,7 +311,7 @@ router.post("/shifts/register", async (req, res) => {
         type: "shift_register",
         title: "Đăng ký ca mới!",
         message: `${employee.full_name} đăng ký ca ${targetShift.name} ngày ${dateFormatted} (${statusText})`,
-        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
       };
       broadcastNotification(notifyPayload);
     } catch (err) {
@@ -594,7 +596,7 @@ router.post("/attendance/check-out", async (req, res) => {
           type: "check_out",
           title: "Nhân viên Check-out!",
           message: `${employee.full_name} check-out ca ${shift.name} (Thiếu check-in)`,
-          time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+          time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
         };
         broadcastNotification(notifyPayload);
       } catch (err) {
@@ -639,7 +641,7 @@ router.post("/attendance/check-out", async (req, res) => {
           type: "check_out",
           title: "Nhân viên Check-out!",
           message: `${employee.full_name} check-out ca ${shift.name} (${typeText})`,
-          time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+          time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
         };
         broadcastNotification(notifyPayload);
       } catch (err) {
@@ -706,7 +708,7 @@ router.post("/leaves", async (req, res) => {
         type: "leave_request",
         title: "Đơn xin nghỉ phép mới!",
         message: `${employee.full_name} xin nghỉ phép từ ${startFormatted} đến ${endFormatted}`,
-        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
       };
       broadcastNotification(notifyPayload);
     } catch (err) {

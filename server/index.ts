@@ -11,6 +11,8 @@ import reservationsRoutes from "./routes/reservations";
 import usersRoutes from "./routes/users";
 import hrRoutes from "./routes/hr";
 import staffRoutes from "./routes/staff";
+import settingsRoutes from "./routes/settings";
+import posRoutes from "./routes/pos";
 
 const app = express();
 const PORT = process.env.API_PORT || 3001;
@@ -19,6 +21,14 @@ const PORT = process.env.API_PORT || 3001;
 app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Disable caching for API routes
+app.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 
 // Health check
@@ -52,6 +62,8 @@ app.use("/api/reservations", reservationsRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/hr", hrRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/pos", posRoutes);
 
 // Stats endpoint for dashboard
 app.get("/api/stats", async (_req, res) => {

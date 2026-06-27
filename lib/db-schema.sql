@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS menu_items (
   image_url TEXT,
   is_active BOOLEAN DEFAULT true,
   sort_order INTEGER DEFAULT 0,
+  show_on_website BOOLEAN DEFAULT true,
+  show_on_pos BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -282,4 +284,79 @@ ALTER TABLE work_shifts ADD COLUMN IF NOT EXISTS cashier_slots INTEGER DEFAULT 0
 UPDATE work_shifts SET barista_slots = 2, cashier_slots = 1 WHERE code = 'sang';
 UPDATE work_shifts SET barista_slots = 2, cashier_slots = 1 WHERE code = 'chieu';
 UPDATE work_shifts SET barista_slots = 3, cashier_slots = 2 WHERE code = 'toi';
+
+-- -------------------------------------------------------------
+-- L'Ambiance Café POS Module Schema
+-- -------------------------------------------------------------
+
+-- POS Orders (Hóa đơn bán hàng)
+CREATE TABLE IF NOT EXISTS pos_orders (
+  id SERIAL PRIMARY KEY,
+  order_code VARCHAR(50) UNIQUE NOT NULL,
+  table_id INTEGER REFERENCES restaurant_tables(id) ON DELETE SET NULL,
+  customer_name VARCHAR(200),
+  customer_phone VARCHAR(50),
+  customer_address TEXT,
+  order_type VARCHAR(50) NOT NULL CHECK (order_type IN ('dine_in', 'take_away', 'delivery')),
+  delivery_partner VARCHAR(50), -- 'grab', 'shopee', 'befood', 'internal'
+  status VARCHAR(50) NOT NULL CHECK (status IN ('draft', 'sent_kitchen', 'preparing', 'completed', 'served', 'paid', 'done', 'cancelled')),
+  notes TEXT,
+  discount_type VARCHAR(50), -- 'percentage', 'amount'
+  discount_value NUMERIC(15, 2) DEFAULT 0,
+  discount_reason VARCHAR(255),
+  vat_rate NUMERIC(5, 2) DEFAULT 10.0,
+  surcharge NUMERIC(15, 2) DEFAULT 0,
+  subtotal NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  total_amount NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  payment_methods JSONB, -- [{"method":"cash", "amount":50000}]
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- POS Order Items (Chi tiết hóa đơn món ăn)
+CREATE TABLE IF NOT EXISTS pos_order_items (
+  id SERIAL PRIMARY KEY,
+  order_id INTEGER REFERENCES pos_orders(id) ON DELETE CASCADE,
+  menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE SET NULL,
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  unit_price NUMERIC(15, 2) NOT NULL,
+  total_price NUMERIC(15, 2) NOT NULL,
+  size VARCHAR(50) DEFAULT 'M',
+  ice_level VARCHAR(50) DEFAULT '100%',
+  sugar_level VARCHAR(50) DEFAULT '100%',
+  temperature VARCHAR(50) DEFAULT 'cold',
+  toppings JSONB, -- [{"name": "Trân châu", "price": 5000}]
+  notes TEXT,
+  voided BOOLEAN DEFAULT false,
+  void_reason VARCHAR(255),
+  void_approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- POS Audit Logs (Lịch sử thao tác POS)
+CREATE TABLE IF NOT EXISTS pos_audit_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(100) NOT NULL,
+  order_id INTEGER REFERENCES pos_orders(id) ON DELETE CASCADE,
+  details TEXT,
+  ip_address VARCHAR(100),
+  device VARCHAR(255),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Inventory Stock (Tồn kho nguyên liệu món ăn)
+CREATE TABLE IF NOT EXISTS inventory_stock (
+  id SERIAL PRIMARY KEY,
+  menu_item_id INTEGER REFERENCES menu_items(id) ON DELETE CASCADE UNIQUE,
+  stock_quantity INTEGER NOT NULL DEFAULT 0,
+  min_threshold INTEGER DEFAULT 10,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pos_orders_code ON pos_orders(order_code);
+CREATE INDEX IF NOT EXISTS idx_pos_orders_status ON pos_orders(status);
+CREATE INDEX IF NOT EXISTS idx_pos_orders_table ON pos_orders(table_id);
+CREATE INDEX IF NOT EXISTS idx_pos_order_items_order ON pos_order_items(order_id);
+
 

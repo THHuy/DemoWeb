@@ -52,6 +52,10 @@ router.post("/", async (_req, res) => {
 
     // Drop all existing tables to allow clean re-initialization and seeding
     await pool.query(`
+      DROP TABLE IF EXISTS pos_order_items CASCADE;
+      DROP TABLE IF EXISTS pos_audit_logs CASCADE;
+      DROP TABLE IF EXISTS pos_orders CASCADE;
+      DROP TABLE IF EXISTS inventory_stock CASCADE;
       DROP TABLE IF EXISTS shift_swaps CASCADE;
       DROP TABLE IF EXISTS attendance_logs CASCADE;
       DROP TABLE IF EXISTS shift_registrations CASCADE;
@@ -70,6 +74,8 @@ router.post("/", async (_req, res) => {
       DROP TABLE IF EXISTS reviews CASCADE;
       DROP TABLE IF EXISTS posts CASCADE;
       DROP TABLE IF EXISTS menu_items CASCADE;
+      DROP TABLE IF EXISTS device_settings CASCADE;
+      DROP TABLE IF EXISTS payment_settings CASCADE;
       DROP TABLE IF EXISTS users CASCADE;
     `);
 
@@ -381,6 +387,19 @@ router.post("/", async (_req, res) => {
             [emp2.rows[0].id, formatDateLocal(prevLeaveStart), formatDateLocal(prevLeaveEnd)]
           );
         }
+      }
+
+      // Seed inventory stock for all menu items
+      const menuItemsForStock = await client.query("SELECT id FROM menu_items");
+      for (const row of menuItemsForStock.rows) {
+        // Seed some quantities, making some items out of stock (qty = 0) for testing
+        const qty = row.id % 4 === 0 ? 0 : 35;
+        await client.query(
+          `INSERT INTO inventory_stock (menu_item_id, stock_quantity, min_threshold)
+           VALUES ($1, $2, 5)
+           ON CONFLICT (menu_item_id) DO NOTHING`,
+          [row.id, qty]
+        );
       }
 
       await client.query("COMMIT");

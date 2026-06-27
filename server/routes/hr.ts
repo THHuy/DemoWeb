@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { authenticate } from "../middleware/auth";
 import { logAudit } from "../utils/audit";
 import XLSX from "xlsx";
+import { broadcastNotification } from "./reservations";
 
 const router = Router();
 
@@ -473,6 +474,30 @@ router.put("/registrations/:id", async (req, res) => {
 
     await logAudit(req.user?.id, "approve_shift", "shift_registrations", parseInt(id), check.rows[0], result.rows[0]);
 
+    // Broadcast real-time notification to employee
+    try {
+      const shiftInfo = await pool.query(
+        `SELECT ws.name as shift_name 
+         FROM shift_registrations sr
+         JOIN work_shifts ws ON sr.shift_id = ws.id
+         WHERE sr.id = $1`,
+        [id]
+      );
+      const shiftName = shiftInfo.rows[0]?.shift_name || "Ca làm việc";
+      const dateFormatted = new Date(result.rows[0].shift_date).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+      const statusText = status === "approved" ? "phê duyệt" : "từ chối";
+      
+      broadcastNotification({
+        type: "shift_approval",
+        title: status === "approved" ? "Đăng ký ca được duyệt! 🎉" : "Đăng ký ca bị từ chối ❌",
+        message: `Đăng ký ca ${shiftName} ngày ${dateFormatted} của bạn đã được ${statusText}.`,
+        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+        targetEmployeeId: result.rows[0].employee_id,
+      });
+    } catch (err) {
+      console.error("Failed to broadcast shift approval notification:", err);
+    }
+
     res.json({ success: true, registration: result.rows[0] });
   } catch (error) {
     console.error("PUT /api/hr/registrations/:id error:", error);
@@ -572,6 +597,41 @@ router.put("/swap-requests/:id", async (req, res) => {
       swap,
       updateSwap.rows[0]
     );
+
+    // Broadcast real-time notifications to both employees involved in the swap
+    try {
+      const shiftInfo = await pool.query(
+        `SELECT sr.shift_date, ws.name as shift_name 
+         FROM shift_registrations sr
+         JOIN work_shifts ws ON sr.shift_id = ws.id
+         WHERE sr.id = $1`,
+        [swap.requester_registration_id]
+      );
+      const shiftDate = shiftInfo.rows[0]?.shift_date;
+      const shiftName = shiftInfo.rows[0]?.shift_name || "Ca làm việc";
+      const dateFormatted = shiftDate ? new Date(shiftDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+      const statusText = status === "approved" ? "phê duyệt" : "từ chối";
+
+      // Notify requester
+      broadcastNotification({
+        type: "swap_approval",
+        title: status === "approved" ? "Yêu cầu đổi ca được duyệt! 🎉" : "Yêu cầu đổi ca bị từ chối ❌",
+        message: `Yêu cầu đổi ca ${shiftName} ngày ${dateFormatted} của bạn đã được ${statusText}.`,
+        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+        targetEmployeeId: swap.requester_id,
+      });
+
+      // Notify target employee
+      broadcastNotification({
+        type: "swap_approval",
+        title: status === "approved" ? "Yêu cầu đổi ca được duyệt! 🎉" : "Yêu cầu đổi ca bị từ chối ❌",
+        message: `Yêu cầu đổi ca ${shiftName} ngày ${dateFormatted} của bạn đã được ${statusText}.`,
+        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+        targetEmployeeId: swap.target_employee_id,
+      });
+    } catch (err) {
+      console.error("Failed to broadcast swap approval notification:", err);
+    }
 
     res.json({ success: true, message: `Yêu cầu đổi ca đã được ${status === "approved" ? "chấp nhận" : "từ chối"}.` });
   } catch (error) {
@@ -763,6 +823,23 @@ router.put("/leaves/:id", async (req, res) => {
       leave,
       updateResult.rows[0]
     );
+
+    // Broadcast real-time notification to employee
+    try {
+      const startFormatted = new Date(leave.start_date).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+      const endFormatted = new Date(leave.end_date).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+      const statusText = status === "approved" ? "phê duyệt" : "từ chối";
+      
+      broadcastNotification({
+        type: "leave_approval",
+        title: status === "approved" ? "Đơn nghỉ phép được duyệt! 🎉" : "Đơn nghỉ phép bị từ chối ❌",
+        message: `Đơn nghỉ phép từ ngày ${startFormatted} đến ${endFormatted} của bạn đã được ${statusText}.`,
+        time: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" })} - ${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}`,
+        targetEmployeeId: leave.employee_id,
+      });
+    } catch (err) {
+      console.error("Failed to broadcast leave approval notification:", err);
+    }
 
     res.json({ success: true, leaveRequest: updateResult.rows[0] });
   } catch (error) {

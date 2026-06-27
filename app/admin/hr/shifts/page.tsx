@@ -56,6 +56,13 @@ interface SwapRequest {
   status: "pending" | "approved" | "rejected";
 }
 
+const getLocalDateString = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function HRShifts() {
   const { user } = useAuth();
   const router = useRouter();
@@ -99,17 +106,33 @@ export default function HRShifts() {
   }, [user, router]);
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
   }, [currentWeekStart]);
 
-  async function fetchData() {
-    setLoading(true);
+  useEffect(() => {
+    const handleNotification = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const type = customEvent.detail?.type;
+      if (type === "shift_register" || type === "shift_approval" || type === "swap_approval") {
+        fetchData();
+      }
+    };
+    window.addEventListener("sse-notification", handleNotification);
+    return () => {
+      window.removeEventListener("sse-notification", handleNotification);
+    };
+  }, []);
+
+  async function fetchData(showSpinner = false) {
+    if (showSpinner) {
+      setLoading(true);
+    }
     try {
       // Get week range formatted strings
-      const weekStartStr = currentWeekStart.toISOString().substring(0, 10);
+      const weekStartStr = getLocalDateString(currentWeekStart);
       const weekEnd = new Date(currentWeekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
-      const weekEndStr = weekEnd.toISOString().substring(0, 10);
+      const weekEndStr = getLocalDateString(weekEnd);
 
       // Fetch configs
       const configsRes = await fetch("/api/hr/shifts");
@@ -266,7 +289,7 @@ export default function HRShifts() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/5 gap-6 text-sm font-semibold">
+      <div className="flex border-b border-white/5 gap-6 text-sm font-semibold overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-px">
         <button
           onClick={() => setActiveTab("calendar")}
           className={`pb-3 transition-colors cursor-pointer relative ${
@@ -345,7 +368,7 @@ export default function HRShifts() {
               </div>
 
               {/* Weekly schedule Matrix */}
-              <div className="bg-stone-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl">
+              <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl overflow-hidden backdrop-blur-xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
@@ -380,7 +403,7 @@ export default function HRShifts() {
 
                             {/* Render ca làm cho mỗi ngày */}
                             {weekDates.map((date, dateIdx) => {
-                              const dateStr = date.toISOString().substring(0, 10);
+                              const dateStr = getLocalDateString(date);
                               const activeShiftDays = registrations.filter(
                                 (r) =>
                                   r.employee_id === emp.id &&
@@ -420,7 +443,7 @@ export default function HRShifts() {
 
           {/* TAB 2: PENDING REGISTRATIONS APPROVALS */}
           {activeTab === "approvals" && (
-            <div className="bg-stone-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl">
+            <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl overflow-hidden backdrop-blur-xl">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -464,17 +487,17 @@ export default function HRShifts() {
                               <div className="inline-flex gap-2">
                                 <button
                                   onClick={() => handleProcessRegistration(reg.id, "approved")}
-                                  className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-stone-950 flex items-center justify-center transition-all cursor-pointer border border-emerald-500/20"
+                                  className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-all cursor-pointer border border-emerald-500/20 hover:border-emerald-500/40"
                                   title="Đồng ý duyệt"
                                 >
                                   <Check className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleProcessRegistration(reg.id, "rejected")}
-                                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-stone-950 flex items-center justify-center transition-all cursor-pointer border border-rose-500/20"
+                                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition-all cursor-pointer border border-rose-500/20 hover:border-rose-500/40"
                                   title="Từ chối duyệt"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <XCircle className="w-4 h-4" />
                                 </button>
                               </div>
                             </td>
@@ -489,7 +512,7 @@ export default function HRShifts() {
 
           {/* TAB 3: SHIFT SWAP REQUESTS */}
           {activeTab === "swaps" && (
-            <div className="bg-stone-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl">
+            <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl overflow-hidden backdrop-blur-xl">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -556,17 +579,17 @@ export default function HRShifts() {
                               <div className="inline-flex gap-2">
                                 <button
                                   onClick={() => handleProcessSwap(swap.id, "approved")}
-                                  className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-stone-950 flex items-center justify-center transition-all cursor-pointer border border-emerald-500/20"
+                                  className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-all cursor-pointer border border-emerald-500/20 hover:border-emerald-500/40"
                                   title="Phê duyệt đổi ca"
                                 >
                                   <Check className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleProcessSwap(swap.id, "rejected")}
-                                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-stone-950 flex items-center justify-center transition-all cursor-pointer border border-rose-500/20"
+                                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition-all cursor-pointer border border-rose-500/20 hover:border-rose-500/40"
                                   title="Từ chối đổi ca"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <XCircle className="w-4 h-4" />
                                 </button>
                               </div>
                             </td>
@@ -594,7 +617,7 @@ export default function HRShifts() {
               </div>
 
               {/* Configurations List */}
-              <div className="bg-stone-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl">
+              <div className="bg-stone-900/40 border border-white/5 rounded-2xl sm:rounded-3xl overflow-hidden backdrop-blur-xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>

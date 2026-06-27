@@ -17,6 +17,7 @@ import {
   MapPin,
   Check,
   X,
+  XCircle,
 } from "lucide-react";
 import Modal from "@/components/admin/Modal";
 
@@ -205,7 +206,7 @@ function HRAttendanceContent() {
   function formatTime(timeStr: string | null) {
     if (!timeStr) return "---";
     const d = new Date(timeStr);
-    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
   }
 
   function formatDevice(userAgent: string | null) {
@@ -471,17 +472,17 @@ function HRAttendanceContent() {
                               <div className="inline-flex gap-2">
                                 <button
                                   onClick={() => handleProcessLeave(leave.id, "approved")}
-                                  className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-stone-950 flex items-center justify-center transition-all cursor-pointer border border-emerald-500/20"
+                                  className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-all cursor-pointer border border-emerald-500/20 hover:border-emerald-500/40"
                                   title="Duyệt phép"
                                 >
                                   <Check className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleProcessLeave(leave.id, "rejected")}
-                                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-stone-950 flex items-center justify-center transition-all cursor-pointer border border-rose-500/20"
+                                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition-all cursor-pointer border border-rose-500/20 hover:border-rose-500/40"
                                   title="Từ chối phép"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <XCircle className="w-4 h-4" />
                                 </button>
                               </div>
                             ) : (

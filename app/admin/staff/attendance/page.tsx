@@ -46,6 +46,11 @@ interface StaffShift {
   end_time: string;
 }
 
+const getVietnameseWeekday = (d: Date) => {
+  const days = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+  return days[d.getDay()];
+};
+
 export default function StaffAttendance() {
   const { user } = useAuth();
   const [time, setTime] = useState<Date | null>(null);
@@ -95,7 +100,7 @@ export default function StaffAttendance() {
     setLoading(true);
     try {
       const todayStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
-      
+
       // Fetch shifts
       const shiftsRes = await fetch(`/api/staff/shifts?start_date=${todayStr}&end_date=${todayStr}`);
       if (shiftsRes.ok) {
@@ -209,6 +214,10 @@ export default function StaffAttendance() {
       setLeaveFeedback({ type: "error", msg: "Vui lòng nhập đầy đủ thông tin xin nghỉ." });
       return;
     }
+    if (new Date(endDate) < new Date(startDate)) {
+      setLeaveFeedback({ type: "error", msg: "Ngày đến không được nhỏ hơn ngày từ." });
+      return;
+    }
     setLeaveSubmitting(true);
     setLeaveFeedback(null);
     try {
@@ -293,7 +302,7 @@ export default function StaffAttendance() {
                     {time ? time.toLocaleTimeString("vi-VN") : "00:00:00"}
                   </div>
                   <div className="text-xs text-stone-400 font-sans mt-0.5">
-                    Thứ Tư, {time ? time.toLocaleDateString("vi-VN") : "---"}
+                    {time ? `${getVietnameseWeekday(time)}, ${time.toLocaleDateString("vi-VN")}` : "---"}
                   </div>
                 </div>
               </div>
@@ -311,11 +320,10 @@ export default function StaffAttendance() {
             <div className="mt-8 space-y-6">
               {feedback && (
                 <div
-                  className={`p-4 rounded-2xl text-sm font-sans flex items-start gap-3 border ${
-                    feedback.type === "success"
+                  className={`p-4 rounded-2xl text-sm font-sans flex items-start gap-3 border ${feedback.type === "success"
                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                       : "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                  }`}
+                    }`}
                 >
                   {feedback.type === "success" ? <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" /> : <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />}
                   <span>{feedback.msg}</span>
@@ -351,11 +359,10 @@ export default function StaffAttendance() {
                     <button
                       onClick={handleCheckIn}
                       disabled={actionLoading || !!currentLog?.check_in}
-                      className={`py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                        currentLog?.check_in
+                      className={`py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${currentLog?.check_in
                           ? "bg-white/5 border border-white/5 text-stone-500 cursor-not-allowed"
                           : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 shadow-lg shadow-amber-500/10"
-                      }`}
+                        }`}
                     >
                       {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserCheck className="w-5 h-5" />}
                       {currentLog?.check_in ? "Đã Check-In" : "Check-In"}
@@ -365,30 +372,29 @@ export default function StaffAttendance() {
                     <button
                       onClick={handleCheckOut}
                       disabled={actionLoading || !currentLog?.check_in || !!currentLog?.check_out}
-                      className={`py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                        !currentLog?.check_in || currentLog?.check_out
+                      className={`py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${!currentLog?.check_in || currentLog?.check_out
                           ? "bg-white/5 border border-white/5 text-stone-500 cursor-not-allowed"
                           : "bg-stone-850 hover:bg-stone-800 text-white border border-white/10"
-                      }`}
+                        }`}
                     >
                       {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Clock className="w-5 h-5" />}
                       {currentLog?.check_out ? "Đã Check-Out" : "Check-Out"}
                     </button>
                   </div>
-                  
+
                   {/* Status Indicator */}
                   {currentLog && (
                     <div className="mt-4 p-3.5 rounded-xl bg-stone-950/30 border border-white/5 text-xs text-stone-400 font-sans flex flex-col gap-1.5">
                       <div className="flex justify-between">
                         <span>Giờ vào:</span>
                         <span className="font-semibold text-white font-mono">
-                          {currentLog.check_in ? new Date(currentLog.check_in).toLocaleTimeString("vi-VN") : "Chưa Check-in"}
+                          {currentLog.check_in ? new Date(currentLog.check_in).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa Check-in"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Giờ ra:</span>
                         <span className="font-semibold text-white font-mono">
-                          {currentLog.check_out ? new Date(currentLog.check_out).toLocaleTimeString("vi-VN") : "Chưa Check-out"}
+                          {currentLog.check_out ? new Date(currentLog.check_out).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa Check-out"}
                         </span>
                       </div>
                       {currentLog.is_late && (
@@ -437,10 +443,10 @@ export default function StaffAttendance() {
                         </td>
                         <td className="py-3 pr-4 font-medium text-stone-200">{log.shift_name}</td>
                         <td className="py-3 pr-4 font-mono text-stone-400">
-                          {log.check_in ? new Date(log.check_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "---"}
+                          {log.check_in ? new Date(log.check_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }) : "---"}
                         </td>
                         <td className="py-3 pr-4 font-mono text-stone-400">
-                          {log.check_out ? new Date(log.check_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "---"}
+                          {log.check_out ? new Date(log.check_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }) : "---"}
                         </td>
                         <td className="py-3 pr-4 text-amber-500/80">
                           {log.is_late && `Trễ ${log.late_minutes}p`}
@@ -450,13 +456,12 @@ export default function StaffAttendance() {
                         </td>
                         <td className="py-3 text-right">
                           <span
-                            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                              log.status === "approved"
+                            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${log.status === "approved"
                                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                 : log.status === "rejected"
-                                ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                                : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                            }`}
+                                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              }`}
                           >
                             {log.status === "approved" ? "Hợp lệ" : log.status === "rejected" ? "Từ chối" : "Chờ duyệt"}
                           </span>
@@ -481,11 +486,10 @@ export default function StaffAttendance() {
             <form onSubmit={handleLeaveSubmit} className="space-y-4">
               {leaveFeedback && (
                 <div
-                  className={`p-3.5 rounded-xl text-xs font-sans flex items-start gap-2.5 border ${
-                    leaveFeedback.type === "success"
+                  className={`p-3.5 rounded-xl text-xs font-sans flex items-start gap-2.5 border ${leaveFeedback.type === "success"
                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                       : "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                  }`}
+                    }`}
                 >
                   {leaveFeedback.type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
                   <span>{leaveFeedback.msg}</span>
@@ -498,33 +502,30 @@ export default function StaffAttendance() {
                   <button
                     type="button"
                     onClick={() => setLeaveType("annual")}
-                    className={`py-2 px-3 border rounded-xl text-xs font-semibold cursor-pointer transition-all ${
-                      leaveType === "annual"
+                    className={`py-2 px-3 border rounded-xl text-xs font-semibold cursor-pointer transition-all ${leaveType === "annual"
                         ? "bg-stone-900 text-white border-amber-500/50 shadow-md"
                         : "bg-stone-950/20 text-stone-500 border-stone-900 hover:text-stone-300"
-                    }`}
+                      }`}
                   >
                     Phép năm
                   </button>
                   <button
                     type="button"
                     onClick={() => setLeaveType("sick")}
-                    className={`py-2 px-3 border rounded-xl text-xs font-semibold cursor-pointer transition-all ${
-                      leaveType === "sick"
+                    className={`py-2 px-3 border rounded-xl text-xs font-semibold cursor-pointer transition-all ${leaveType === "sick"
                         ? "bg-stone-900 text-white border-amber-500/50 shadow-md"
                         : "bg-stone-950/20 text-stone-500 border-stone-900 hover:text-stone-300"
-                    }`}
+                      }`}
                   >
                     Nghỉ bệnh
                   </button>
                   <button
                     type="button"
                     onClick={() => setLeaveType("unpaid")}
-                    className={`py-2 px-3 border rounded-xl text-xs font-semibold cursor-pointer transition-all ${
-                      leaveType === "unpaid"
+                    className={`py-2 px-3 border rounded-xl text-xs font-semibold cursor-pointer transition-all ${leaveType === "unpaid"
                         ? "bg-stone-900 text-white border-amber-500/50 shadow-md"
                         : "bg-stone-950/20 text-stone-500 border-stone-900 hover:text-stone-300"
-                    }`}
+                      }`}
                   >
                     Không lương
                   </button>
@@ -537,7 +538,12 @@ export default function StaffAttendance() {
                   type="date"
                   required
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    if (endDate && e.target.value > endDate) {
+                      setEndDate(e.target.value);
+                    }
+                  }}
                   className="w-full px-4 py-2.5 bg-stone-900 border border-stone-850 rounded-xl text-stone-200 focus:outline-none focus:border-amber-500/40 text-xs font-sans"
                 />
               </div>
@@ -547,6 +553,7 @@ export default function StaffAttendance() {
                 <input
                   type="date"
                   required
+                  min={startDate}
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-full px-4 py-2.5 bg-stone-900 border border-stone-850 rounded-xl text-stone-200 focus:outline-none focus:border-amber-500/40 text-xs font-sans"
@@ -590,23 +597,21 @@ export default function StaffAttendance() {
                 leaveRequests.map((req) => (
                   <div key={req.id} className="p-3.5 bg-stone-950/40 border border-white/5 rounded-2xl space-y-2 relative group/leave font-sans">
                     <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                        req.leave_type === "annual"
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${req.leave_type === "annual"
                           ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
                           : req.leave_type === "sick"
-                          ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                          : "bg-stone-500/10 text-stone-400 border-stone-500/20"
-                      }`}>
+                            ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                            : "bg-stone-500/10 text-stone-400 border-stone-500/20"
+                        }`}>
                         {req.leave_type === "annual" ? "Phép năm" : req.leave_type === "sick" ? "Nghỉ bệnh" : "Không lương"}
                       </span>
 
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                        req.status === "approved"
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${req.status === "approved"
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                           : req.status === "rejected"
-                          ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                          : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                      }`}>
+                            ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                            : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        }`}>
                         {req.status === "approved" ? "Đã duyệt" : req.status === "rejected" ? "Từ chối" : "Chờ duyệt"}
                       </span>
                     </div>

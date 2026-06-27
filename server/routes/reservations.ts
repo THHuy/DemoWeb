@@ -4,8 +4,16 @@ import { authenticate, requireRole } from "../middleware/auth";
 
 const router = Router();
 
+interface SSEClient {
+  res: Response;
+  userId: number;
+  role: string;
+  isHRAdmin: boolean;
+  employeeId?: number;
+}
+
 // Store connected SSE clients
-let sseClients: Response[] = [];
+let sseClients: SSEClient[] = [];
 
 // GET /api/reservations/sse — Server-Sent Events endpoint for real-time notifications (Staff + Admin)
 router.get("/sse", authenticate, requireRole(["admin", "staff"]), async (req, res) => {
@@ -29,11 +37,6 @@ router.get("/sse", authenticate, requireRole(["admin", "staff"]), async (req, re
       }
     }
 
-    if (!isHRAdmin) {
-      res.status(403).json({ error: "Forbidden. Chỉ Admin hoặc Quản lý mới được phép kết nối." });
-      return;
-    }
-
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -44,11 +47,31 @@ router.get("/sse", authenticate, requireRole(["admin", "staff"]), async (req, re
       res.write(":\n\n");
     }, 30000);
 
-    sseClients.push(res);
+    // Get employee ID if exists
+    let employeeId: number | undefined = undefined;
+    if (req.user) {
+      const empRes = await pool.query(
+        "SELECT id FROM employees WHERE user_id = $1",
+        [req.user.id]
+      );
+      if (empRes.rows.length > 0) {
+        employeeId = empRes.rows[0].id;
+      }
+    }
+
+    const clientObj: SSEClient = {
+      res,
+      userId: req.user!.id,
+      role: req.user!.role,
+      isHRAdmin,
+      employeeId
+    };
+
+    sseClients.push(clientObj);
 
     req.on("close", () => {
       clearInterval(keepAliveId);
-      sseClients = sseClients.filter((client) => client !== res);
+      sseClients = sseClients.filter((client) => client !== clientObj);
     });
   } catch (err) {
     console.error("SSE connection error:", err);
@@ -62,14 +85,14 @@ router.post("/", async (req, res) => {
     const { name, phone, booking_date, booking_time, guests, notes } = req.body;
 
     if (!name || !phone || !booking_date || !booking_time || !guests) {
-       res.status(400).json({ error: "Name, phone, booking date, time, and guests are required" });
-       return;
+      res.status(400).json({ error: "Name, phone, booking date, time, and guests are required" });
+      return;
     }
 
     const guestsNum = parseInt(guests);
     if (isNaN(guestsNum) || guestsNum <= 0) {
-       res.status(400).json({ error: "Guests must be a valid number greater than 0" });
-       return;
+      res.status(400).json({ error: "Guests must be a valid number greater than 0" });
+      return;
     }
 
     const result = await pool.query(
@@ -83,7 +106,13 @@ router.post("/", async (req, res) => {
 
     // Broadcast new reservation to all connected admin/staff clients via SSE
     sseClients.forEach((client) => {
-      client.write(`data: ${JSON.stringify(newReservation)}\n\n`);
+      try {
+        if (client.isHRAdmin) {
+          client.res.write(`data: ${JSON.stringify(newReservation)}\n\n`);
+        }
+      } catch (err) {
+        console.error("SSE broadcast error:", err);
+      }
     });
 
     res.status(201).json({ success: true, reservation: newReservation });
@@ -127,8 +156,8 @@ router.get("/tables/status", authenticate, requireRole(["admin", "staff"]), asyn
   try {
     const { date } = req.query;
     if (!date) {
-       res.status(400).json({ error: "Date parameter is required (YYYY-MM-DD)" });
-       return;
+      res.status(400).json({ error: "Date parameter is required (YYYY-MM-DD)" });
+      return;
     }
 
     const query = `
@@ -158,8 +187,8 @@ router.put("/:id/assign-table", authenticate, requireRole(["admin", "staff"]), a
     // 1. Get reservation details
     const resResult = await pool.query("SELECT * FROM reservations WHERE id = $1", [id]);
     if (resResult.rows.length === 0) {
-       res.status(404).json({ error: "Reservation not found" });
-       return;
+      res.status(404).json({ error: "Reservation not found" });
+      return;
     }
     const reservation = resResult.rows[0];
 
@@ -176,15 +205,15 @@ router.put("/:id/assign-table", authenticate, requireRole(["admin", "staff"]), a
     // 2. Get table details
     const tableResult = await pool.query("SELECT * FROM restaurant_tables WHERE id = $1", [table_id]);
     if (tableResult.rows.length === 0) {
-       res.status(404).json({ error: "Table not found" });
-       return;
+      res.status(404).json({ error: "Table not found" });
+      return;
     }
     const table = tableResult.rows[0];
 
     // 3. Verify capacity
     if (table.capacity < reservation.guests) {
-       res.status(400).json({ 
-        error: `Bàn ${table.table_number} có sức chứa tối đa ${table.capacity} người, nhỏ hơn số lượng khách đặt (${reservation.guests} người).` 
+      res.status(400).json({
+        error: `Bàn ${table.table_number} có sức chứa tối đa ${table.capacity} người, nhỏ hơn số lượng khách đặt (${reservation.guests} người).`
       });
       return;
     }
@@ -201,8 +230,8 @@ router.put("/:id/assign-table", authenticate, requireRole(["admin", "staff"]), a
 
     if (conflictResult.rows.length > 0) {
       const conflict = conflictResult.rows[0];
-       res.status(400).json({ 
-        error: `Bàn ${table.table_number} đã được gán cho khách ${conflict.name} lúc ${conflict.booking_time.substring(0, 5)} trong ngày này.` 
+      res.status(400).json({
+        error: `Bàn ${table.table_number} đã được gán cho khách ${conflict.name} lúc ${conflict.booking_time.substring(0, 5)} trong ngày này.`
       });
       return;
     }
@@ -239,8 +268,8 @@ router.put("/:id", authenticate, requireRole(["admin", "staff"]), async (req, re
     const { status } = req.body;
 
     if (!status || !["pending", "confirmed", "cancelled"].includes(status)) {
-       res.status(400).json({ error: "Invalid status value" });
-       return;
+      res.status(400).json({ error: "Invalid status value" });
+      return;
     }
 
     const result = await pool.query(
@@ -252,8 +281,8 @@ router.put("/:id", authenticate, requireRole(["admin", "staff"]), async (req, re
     );
 
     if (result.rows.length === 0) {
-       res.status(404).json({ error: "Reservation not found" });
-       return;
+      res.status(404).json({ error: "Reservation not found" });
+      return;
     }
 
     res.json({ success: true, reservation: result.rows[0] });
@@ -274,8 +303,8 @@ router.delete("/:id", authenticate, requireRole(["admin"]), async (req, res) => 
     );
 
     if (result.rows.length === 0) {
-       res.status(404).json({ error: "Reservation not found" });
-       return;
+      res.status(404).json({ error: "Reservation not found" });
+      return;
     }
 
     res.json({ success: true, deleted: result.rows[0] });
@@ -288,7 +317,15 @@ router.delete("/:id", authenticate, requireRole(["admin"]), async (req, res) => 
 export function broadcastNotification(payload: any) {
   sseClients.forEach((client) => {
     try {
-      client.write(`data: ${JSON.stringify(payload)}\n\n`);
+      if (payload.targetEmployeeId !== undefined) {
+        if (client.employeeId === payload.targetEmployeeId) {
+          client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        }
+      } else {
+        if (client.isHRAdmin) {
+          client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        }
+      }
     } catch (err) {
       console.error("SSE broadcast error:", err);
     }

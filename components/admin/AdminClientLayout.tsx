@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./AuthProvider";
 import Sidebar from "./Sidebar";
+import Modal from "./Modal";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Loader2, Bell, X, Calendar, Clock, Users, Trash2, Check } from "lucide-react";
+import { Loader2, Bell, X, Calendar, Clock, Users, Trash2, Check, Phone, ExternalLink, ArrowRight, AlertCircle, UserCheck, RefreshCw, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface NotificationToast {
@@ -40,6 +41,7 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/admin/login";
+  const isPOSPage = pathname === "/admin/pos";
   const isHRAdmin =
     user?.role === "admin" ||
     user?.businessRoles?.includes("owner") ||
@@ -47,20 +49,28 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [toasts, setToasts] = useState<NotificationToast[]>([]);
   const [notifications, setNotifications] = useState<PersistentNotification[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<PersistentNotification | null>(null);
 
-  // Load notifications from localStorage
+  // Responsive sidebar states
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Load notifications from localStorage when user is loaded
   useEffect(() => {
+    if (!user) return;
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("lambiance_admin_notifications");
+      const stored = localStorage.getItem(`lambiance_notifications_${user.id}`);
       if (stored) {
         try {
           setNotifications(JSON.parse(stored));
         } catch (e) {
           console.error("Failed to load notifications:", e);
         }
+      } else {
+        setNotifications([]);
       }
     }
-  }, []);
+  }, [user]);
 
   // Handle outside click to close dropdown
   useEffect(() => {
@@ -116,7 +126,7 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   // SSE connection for real-time notifications
   useEffect(() => {
-    if (!user || isLoginPage || !isHRAdmin) return;
+    if (!user || isLoginPage) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
     const eventSource = new EventSource(`${apiUrl}/api/reservations/sse`, {
@@ -135,11 +145,11 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         // Add to persistent notifications
         const newPersNotification: PersistentNotification = {
           id: `notif-${toastId}-${Math.random().toString(36).substring(2, 9)}`,
-          name: newBooking.name,
-          phone: newBooking.phone,
-          guests: newBooking.guests,
-          booking_date: newBooking.booking_date,
-          booking_time: newBooking.booking_time,
+          name: newBooking.name || "",
+          phone: newBooking.phone || "",
+          guests: newBooking.guests || 0,
+          booking_date: newBooking.booking_date || "",
+          booking_time: newBooking.booking_time || "",
           read: false,
           created_at: toastId,
           type: newBooking.type,
@@ -150,11 +160,16 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         setNotifications((prev) => {
           const updated = [newPersNotification, ...prev].slice(0, 50); // limit to 50 items
-          if (typeof window !== "undefined") {
-            localStorage.setItem("lambiance_admin_notifications", JSON.stringify(updated));
+          if (typeof window !== "undefined" && user) {
+            localStorage.setItem(`lambiance_notifications_${user.id}`, JSON.stringify(updated));
           }
           return updated;
         });
+
+        // Dispatch a custom event so active pages can refetch dynamically in real-time
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("sse-notification", { detail: newBooking }));
+        }
 
         // Auto remove toast after 8 seconds
         setTimeout(() => {
@@ -172,7 +187,7 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     return () => {
       eventSource.close();
     };
-  }, [user, isLoginPage, isHRAdmin]);
+  }, [user, isLoginPage]);
 
   if (loading) {
     return (
@@ -183,8 +198,8 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     );
   }
 
-  // If logged in or on the login page
-  if (isLoginPage) {
+  // If logged in or on the login/POS page
+  if (isLoginPage || isPOSPage) {
     return <>{children}</>;
   }
 
@@ -205,43 +220,91 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     // Mark as read
     const updated = notifications.map((n) => (n.id === notif.id ? { ...n, read: true } : n));
     setNotifications(updated);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("lambiance_admin_notifications", JSON.stringify(updated));
+    if (typeof window !== "undefined" && user) {
+      localStorage.setItem(`lambiance_notifications_${user.id}`, JSON.stringify(updated));
     }
     setDropdownOpen(false);
-    if (notif.type === "shift_register") {
-      router.push("/admin/hr/shifts?tab=approvals");
-    } else if (notif.type === "check_out" || notif.type === "check_in") {
-      router.push("/admin/hr/attendance?tab=logs");
-    } else if (notif.type === "leave_request") {
-      router.push("/admin/hr/attendance?tab=leaves");
-    } else {
-      router.push("/admin/reservations");
+    // Open detail modal instead of navigating
+    setSelectedNotification(notif);
+  };
+
+  const getNotificationRoute = (notif: PersistentNotification) => {
+    if (notif.type === "shift_register") return "/admin/hr/shifts?tab=approvals";
+    if (notif.type === "check_out" || notif.type === "check_in") return "/admin/hr/attendance?tab=logs";
+    if (notif.type === "leave_request") return "/admin/hr/attendance?tab=leaves";
+    if (notif.type === "shift_approval" || notif.type === "swap_approval") return "/admin/staff/shifts";
+    if (notif.type === "leave_approval") return "/admin/staff/attendance";
+    return "/admin/reservations";
+  };
+
+  const getNotificationTypeLabel = (type?: string) => {
+    switch (type) {
+      case "shift_register": return "Đăng ký ca làm";
+      case "check_in": return "Check-in";
+      case "check_out": return "Check-out";
+      case "leave_request": return "Xin nghỉ phép";
+      case "shift_approval": return "Duyệt ca làm";
+      case "swap_approval": return "Duyệt đổi ca";
+      case "leave_approval": return "Duyệt nghỉ phép";
+      default: return "Đặt bàn mới";
     }
+  };
+
+  const getNotificationIcon = (type?: string) => {
+    switch (type) {
+      case "shift_register": return <RefreshCw className="w-5 h-5" />;
+      case "check_in": return <UserCheck className="w-5 h-5" />;
+      case "check_out": return <Clock className="w-5 h-5" />;
+      case "leave_request": return <AlertCircle className="w-5 h-5" />;
+      case "shift_approval": return <CheckCircle2 className="w-5 h-5" />;
+      case "swap_approval": return <RefreshCw className="w-5 h-5" />;
+      case "leave_approval": return <CheckCircle2 className="w-5 h-5" />;
+      default: return <Calendar className="w-5 h-5" />;
+    }
+  };
+
+  const getNotificationColor = (type?: string) => {
+    switch (type) {
+      case "shift_register": return { bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-400" };
+      case "check_in": return { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-400" };
+      case "check_out": return { bg: "bg-violet-500/10", border: "border-violet-500/20", text: "text-violet-400" };
+      case "leave_request": return { bg: "bg-rose-500/10", border: "border-rose-500/20", text: "text-rose-400" };
+      case "shift_approval": return { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-400" };
+      case "swap_approval": return { bg: "bg-indigo-500/10", border: "border-indigo-500/20", text: "text-indigo-400" };
+      case "leave_approval": return { bg: "bg-teal-500/10", border: "border-teal-500/20", text: "text-teal-400" };
+      default: return { bg: "bg-amber-500/10", border: "border-amber-500/20", text: "text-amber-400" };
+    }
+  };
+
+  const handleNavigateFromModal = () => {
+    if (!selectedNotification) return;
+    const route = getNotificationRoute(selectedNotification);
+    setSelectedNotification(null);
+    router.push(route);
   };
 
   const handleDeleteNotification = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const updated = notifications.filter((n) => n.id !== id);
     setNotifications(updated);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("lambiance_admin_notifications", JSON.stringify(updated));
+    if (typeof window !== "undefined" && user) {
+      localStorage.setItem(`lambiance_notifications_${user.id}`, JSON.stringify(updated));
     }
   };
 
   const handleMarkAllRead = () => {
     const updated = notifications.map((n) => ({ ...n, read: true }));
     setNotifications(updated);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("lambiance_admin_notifications", JSON.stringify(updated));
+    if (typeof window !== "undefined" && user) {
+      localStorage.setItem(`lambiance_notifications_${user.id}`, JSON.stringify(updated));
     }
   };
 
   const handleClearAll = () => {
     if (!confirm("Bạn có chắc muốn xóa tất cả thông báo?")) return;
     setNotifications([]);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("lambiance_admin_notifications");
+    if (typeof window !== "undefined" && user) {
+      localStorage.removeItem(`lambiance_notifications_${user.id}`);
     }
   };
 
@@ -262,20 +325,40 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         background: "linear-gradient(135deg, #0A0A0A 0%, #121212 50%, #1A1A1A 100%)",
       }}
     >
-      <Sidebar />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      />
       
-      <main className="ml-64 min-h-screen transition-all duration-300 flex flex-col">
+      <main className={`min-h-screen transition-all duration-300 flex flex-col ${
+        collapsed ? "md:ml-[72px]" : "md:ml-64"
+      } ml-0`}>
         {/* Top Header */}
-        <header className="h-16 border-b border-white/5 bg-stone-900/10 backdrop-blur-xl px-8 flex items-center justify-between sticky top-0 z-30">
-          <div>
-            <span className="text-xs text-stone-500 font-sans tracking-wide">
-              Hệ thống quản trị &bull; {user?.role === "admin" ? "Quản trị viên" : "Nhân viên"}
-            </span>
+        <header className="h-16 border-b border-white/5 bg-stone-900/10 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            {/* Hamburger menu button for mobile */}
+            {user && !isLoginPage && (
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="p-2 rounded-lg bg-white/5 border border-white/10 text-stone-300 hover:text-white md:hidden cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
+            <div>
+              <span className="text-xs text-stone-500 font-sans tracking-wide">
+                Hệ thống quản trị &bull; {user?.role === "admin" ? "Quản trị viên" : "Nhân viên"}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
             {/* Notification Bell Dropdown */}
-            {isHRAdmin && (
+            {user && !isLoginPage && (
               <div className="relative" id="notif-bell-container">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -386,13 +469,15 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       </div>
 
                       {/* Footer */}
-                      <Link
-                        href="/admin/reservations"
-                        onClick={() => setDropdownOpen(false)}
-                        className="block text-center py-2.5 bg-stone-950 hover:bg-white/2 text-[10px] font-bold text-stone-400 uppercase tracking-widest border-t border-t-white/5 transition-colors"
-                      >
-                        Xem tất cả đặt bàn &rarr;
-                      </Link>
+                      {isHRAdmin && (
+                        <Link
+                          href="/admin/reservations"
+                          onClick={() => setDropdownOpen(false)}
+                          className="block text-center py-2.5 bg-stone-950 hover:bg-white/2 text-[10px] font-bold text-stone-400 uppercase tracking-widest border-t border-t-white/5 transition-colors"
+                        >
+                          Xem tất cả đặt bàn &rarr;
+                        </Link>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -405,7 +490,7 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </main>
 
       {/* Floating Notifications Area */}
-      {isHRAdmin && (
+      {user && !isLoginPage && (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-4 max-w-sm w-full pointer-events-none">
           <AnimatePresence>
             {toasts.map((toast) => (
@@ -484,6 +569,131 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </AnimatePresence>
         </div>
       )}
+
+      {/* Notification Detail Modal */}
+      <Modal
+        isOpen={!!selectedNotification}
+        onClose={() => setSelectedNotification(null)}
+        title="Chi tiết thông báo"
+        size="sm"
+      >
+        {selectedNotification && (
+          <div className="space-y-6">
+            {/* Type Badge & Time */}
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg border ${getNotificationColor(selectedNotification.type).bg} ${getNotificationColor(selectedNotification.type).border} ${getNotificationColor(selectedNotification.type).text}`}>
+                {getNotificationTypeLabel(selectedNotification.type)}
+              </span>
+              <span className="text-[10px] text-stone-500 font-mono">
+                {new Date(selectedNotification.created_at).toLocaleString("vi-VN", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </span>
+            </div>
+
+            {/* Icon + Title */}
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl ${getNotificationColor(selectedNotification.type).bg} border ${getNotificationColor(selectedNotification.type).border} flex items-center justify-center ${getNotificationColor(selectedNotification.type).text} shrink-0`}>
+                {getNotificationIcon(selectedNotification.type)}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {selectedNotification.title || selectedNotification.name}
+                </h3>
+                {selectedNotification.message && (
+                  <p className="text-xs text-stone-400 mt-0.5">{selectedNotification.message}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Detail Info Cards */}
+            {selectedNotification.type ? (
+              /* HR-type notification details */
+              <div className="space-y-3">
+                {selectedNotification.name && (
+                  <div className="flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                    <Users className="w-4 h-4 text-stone-500 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Nhân viên</p>
+                      <p className="text-sm text-white font-medium">{selectedNotification.name}</p>
+                    </div>
+                  </div>
+                )}
+                {selectedNotification.time && (
+                  <div className="flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                    <Clock className="w-4 h-4 text-stone-500 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Thời gian</p>
+                      <p className="text-sm text-white font-medium">{selectedNotification.time}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Reservation-type notification details */
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                  <Users className="w-4 h-4 text-stone-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Khách hàng</p>
+                    <p className="text-sm text-white font-medium">{selectedNotification.name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                  <Phone className="w-4 h-4 text-stone-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Điện thoại</p>
+                    <p className="text-sm text-white font-medium">{selectedNotification.phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                  <Calendar className="w-4 h-4 text-stone-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Ngày đặt</p>
+                    <p className="text-sm text-white font-medium">
+                      {new Date(selectedNotification.booking_date).toLocaleDateString("vi-VN", {
+                        weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                  <Clock className="w-4 h-4 text-stone-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Giờ đặt</p>
+                    <p className="text-sm text-white font-medium">{formatTime(selectedNotification.booking_time)}</p>
+                  </div>
+                </div>
+                <div className="col-span-2 flex items-center gap-3 p-3.5 bg-stone-950/40 border border-white/5 rounded-xl">
+                  <Users className="w-4 h-4 text-stone-500 shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-stone-500 uppercase tracking-wider font-semibold">Số khách</p>
+                    <p className="text-sm text-white font-medium">{selectedNotification.guests} khách</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setSelectedNotification(null)}
+                className="flex-1 py-3 rounded-xl border border-white/10 text-stone-300 hover:bg-white/5 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleNavigateFromModal}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/10"
+              >
+                Xem chi tiết
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
